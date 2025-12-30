@@ -27,7 +27,8 @@ model Company {
   name      String   // Razão Social
   tradeName String?  // Nome Fantasia
   email     String?
-  
+
+
   // Endereço
   cep         String?
   street      String?
@@ -37,6 +38,8 @@ model Company {
   city        String?
   state       String?
   country     String?
+  contaAzul    IntegracaoContaAzul?
+  clientesCA      ContaAzulCliente[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -73,7 +76,7 @@ model PdvLicencaGrupo {
 model PdvLicencaFilial {
   id               Int      @id @default(autoincrement())
   sistema         String?  @default("PDVLEGAL")
-  codGrupo         Int      
+  codGrupo         Int
   codFilial        Int      @unique // O 'codfilial' da API
   nome             String   // nomefilial
   documento        String?  // cpf_cnpj
@@ -81,7 +84,7 @@ model PdvLicencaFilial {
   matriz           Boolean  // matriz (true/false)
   email            String?
   dataCadastroApi  DateTime? // datacadastro vindo da API
-   
+
 
   // Chave estrangeira ligando ao Grupo
   grupoId          Int
@@ -140,3 +143,59 @@ model VerificationToken {
 }
 
 
+model IntegracaoContaAzul {
+  id            String   @id @default(uuid())
+  clientId      String
+  clientSecret  String
+  accessToken   String?  @db.Text
+  refreshToken  String?  @db.Text
+  expiresIn     Int?
+  updatedAt     DateTime @updatedAt
+
+  empresaId     Int      @unique
+  empresa       Company  @relation(fields: [empresaId], references: [id])
+
+  @@map("integracao_conta_azul")
+}
+
+
+
+model ContaAzulCliente {
+  id              String   @id @default(uuid()) // Nosso ID interno do sistema
+
+  // Identificadores da Conta Azul
+  caId            String   @unique              // O campo "id" do JSON (UUID deles)
+  idLegado        Int?                          // O campo "id_legado"
+  uuidLegado      String?                       // O campo "uuid_legado"
+
+  // Dados principais
+  nome            String
+  documento       String?                       // CPF ou CNPJ
+  email           String?
+  telefone        String?
+  ativo           Boolean  @default(true)
+  tipoPessoa      String?                       // "Jurídica" ou "Física"
+  perfis          String[]                      // Array de strings ["Cliente", "Fornecedor"]
+  observacoes     String?  @db.Text             // "observacoes_gerais"
+
+  // Datas vindas da API (Controle deles)
+  dataCriacaoCA   DateTime?                     // "data_criacao" do JSON
+  dataAlteracaoCA DateTime?                     // "data_alteracao" do JSON
+
+  // Nossas datas (Controle de sincronização)
+  createdAt       DateTime @default(now())      // Quando sincronizamos a primeira vez
+  updatedAt       DateTime @updatedAt           // Última vez que o nosso sistema atualizou
+
+  // --- NOVOS CAMPOS: DADOS DO CONTRATO ---
+  contratoId         String?   @unique // ID do contrato na CA (para evitar duplicidade em outros clientes)
+  contratoStatus     String?   // "ATIVO", "INATIVO"
+  contratoNumero     Int?      // Numero do contrato
+  contratoInicio     DateTime?
+  contratoVencimento DateTime? // Proximo Vencimento
+
+  // Relacionamento com a Empresa do seu SaaS
+  empresaId       Int
+  empresa         Company  @relation(fields: [empresaId], references: [id])
+
+  @@map("conta_azul_clientes")
+}

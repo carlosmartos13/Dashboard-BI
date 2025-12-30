@@ -17,9 +17,9 @@ import type { ButtonProps } from '@mui/material/Button'
 import { toast } from 'react-toastify'
 
 // Component Imports
-import PaymentProvidersDialog from '@components/dialogs/payment-providers' 
+
 import OpenDialogOnElementClick from '@components/dialogs/OpenDialogOnElementClick'
-import PdvlegalConfig from './pdvlegalConfig/pdvlegalconfig' // Verifique se o caminho está correto
+import PdvlegalConfig from './pdvlegalconfig' // Verifique se o caminho está correto
 
 const Integracoes = () => {
   // Estado para controlar a conexão (começa falso, mas o useEffect vai verificar)
@@ -31,7 +31,7 @@ const Integracoes = () => {
     const checkStatus = async () => {
       try {
         // Chama o GET do arquivo route.ts que você mostrou
-        const response = await fetch('/api/pdv-auth')
+        const response = await fetch('/api/integracoes/api-pdvLegal/pdv-auth')
         const data = await response.json()
 
         // Se o backend disser que tem token (isConnected: true), atualizamos o estado
@@ -51,7 +51,7 @@ const Integracoes = () => {
   const handleTestConnection = async () => {
     setLoadingTest(true)
     try {
-      const response = await fetch('/api/pdv-auth', { method: 'POST' })
+      const response = await fetch('/api/integracoes/api-pdvLegal/pdv-auth', { method: 'POST' })
       const data = await response.json()
 
       if (response.ok) {

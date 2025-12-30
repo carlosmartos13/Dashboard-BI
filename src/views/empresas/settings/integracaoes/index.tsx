@@ -2,18 +2,23 @@
 import Grid from '@mui/material/Grid'
 
 // Component Imports
-import Pdvlegal from './pdvlegal'
+import Pdvlegal from './pdvlegalConfig/pdvlegal'
+import ContaAzul from './contaAzul/contaAzul'
 
-
-const Pdvlegalcard = () => {
+const IntegracoesCads = () => {
   return (
     <Grid container spacing={6}>
       <Grid size={{ xs: 6 }}>
         <Pdvlegal />
+        
       </Grid>
+      <Grid size={{ xs: 6 }}>
+        <ContaAzul empresaId={1}/>
+       </Grid>
+      
       
     </Grid>
   )
 }
 
-export default Pdvlegalcard
+export default IntegracoesCads

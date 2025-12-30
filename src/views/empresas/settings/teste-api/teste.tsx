@@ -23,14 +23,16 @@ import { toast } from 'react-toastify'
 const ApiTestPage = () => {
   // States
   const [endpoint, setEndpoint] = useState('')
-  const [integration, setIntegration] = useState('pdvlegal') // Padrão selecionado
+  const [integration, setIntegration] = useState('pdvlegal')
+  const [empresaId, setEmpresaId] = useState('1') // NOVO: Padrão 1 (seu teste local)
   const [response, setResponse] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<number | null>(null)
 
   const handleFetch = async () => {
     if (!endpoint) {
-      toast.warning('Por favor, digite uma rota (ex: /empresas)')
+      toast.warning('Por favor, digite uma rota (ex: /v1/sales)')
+
       return
     }
 
@@ -39,25 +41,32 @@ const ApiTestPage = () => {
     setStatus(null)
 
     try {
-      // Chama o nosso Proxy (Passo 1)
-      const res = await fetch('/api/pdv-proxy', {
+      let url = ''
+      const bodyData: any = { endpoint }
+
+      // Lógica para selecionar o Proxy correto
+      if (integration === 'pdvlegal') {
+        url = '/api/integracoes/api-pdvLegal/pdv-proxy'
+        bodyData.integration = integration
+      } else if (integration === 'contaAzul') {
+        url = '/api/integracoes/api-contaAzul/ca-proxy'
+
+        // Conta Azul EXIGE o ID para buscar o token no banco
+        bodyData.empresaId = empresaId
+      }
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          endpoint: endpoint,
-          integration: integration
-        })
+        body: JSON.stringify(bodyData)
       })
 
       const result = await res.json()
 
-      // O proxy sempre retorna 200 se conseguir contatar a API, 
-      // mas dentro do result traz o status real da API externa
       setStatus(result.status || res.status)
       setResponse(result.data || result)
-
     } catch (error) {
-      setResponse({ error: "Erro de comunicação com o servidor local." })
+      setResponse({ error: 'Erro de comunicação com o servidor local.' })
     } finally {
       setLoading(false)
     }
@@ -70,49 +79,65 @@ const ApiTestPage = () => {
     }
   }
 
+  // Define o placeholder baseado na escolha
+  const placeholderExemplo = integration === 'contaAzul' ? '/v1/sales' : '/empresas'
+
   return (
     <Card>
-      <CardHeader 
-        title='Teste de Integração API' 
+      <CardHeader
+        title='Teste de Integração API'
         subheader='Selecione a integração e a rota para testar os dados reais'
         avatar={<i className='tabler-server-2' style={{ fontSize: '1.5rem' }} />}
       />
       <CardContent className='flex flex-col gap-5'>
-        
         <Box className='flex flex-col sm:flex-row gap-4'>
           {/* Seletor de Integração */}
-          <FormControl sx={{ minWidth: { xs: '100%', sm: 250 } }}>
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 } }}>
             <InputLabel>Integração</InputLabel>
-            <Select
-              value={integration}
-              label='Integração'
-              onChange={e => setIntegration(e.target.value)}
-            >
-              <MenuItem value='pdvlegal'>PDV Legal (TabletCloud)</MenuItem>
-              {/* Futuras integrações virão aqui */}
-              <MenuItem value='ifood' disabled>iFood (Em breve)</MenuItem>
+            <Select value={integration} label='Integração' onChange={e => setIntegration(e.target.value)}>
+              <MenuItem value='pdvlegal'>PDV Legal</MenuItem>
+              <MenuItem value='contaAzul'>Conta Azul</MenuItem> {/* HABILITADO */}
+              <MenuItem value='Asaas' disabled>
+                Asaas (Em breve)
+              </MenuItem>
             </Select>
           </FormControl>
 
+          {/* NOVO: Input de ID da Empresa (Só aparece se for Conta Azul) */}
+          {integration === 'contaAzul' && (
+            <TextField
+              label='ID Empresa'
+              variant='outlined'
+              value={empresaId}
+              onChange={e => setEmpresaId(e.target.value)}
+              sx={{ maxWidth: 100 }}
+              helperText='ID do Banco'
+            />
+          )}
+
           {/* Input da Rota */}
-          <TextField 
-            fullWidth 
-            label='Rota GET' 
-            variant='outlined' 
+          <TextField
+            fullWidth
+            label='Rota GET (sem domínio)'
+            variant='outlined'
             value={endpoint}
             onChange={e => setEndpoint(e.target.value)}
-            placeholder='/v1/empresas' // Exemplo de placeholder
+            placeholder={placeholderExemplo}
             InputProps={{
-              startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>GET</Typography>
+              startAdornment: (
+                <Typography color='text.secondary' sx={{ mr: 1, whiteSpace: 'nowrap' }}>
+                  {integration === 'contaAzul' ? 'api-v2.contaazul.com' : 'api...'}
+                </Typography>
+              )
             }}
           />
 
-          <Button 
-            variant='contained' 
+          <Button
+            variant='contained'
             onClick={handleFetch}
             disabled={loading}
             startIcon={loading ? <i className='tabler-loader-2 animate-spin' /> : <i className='tabler-send' />}
-            sx={{ px: 4, minWidth: 120 }}
+            sx={{ px: 4, minWidth: 120, height: '56px' }} // Altura fixa para alinhar com inputs
           >
             {loading ? '...' : 'Enviar'}
           </Button>
@@ -127,18 +152,18 @@ const ApiTestPage = () => {
                 Resultado:
               </Typography>
               {status && (
-                <Chip 
-                  label={`Status: ${status}`} 
-                  color={status >= 200 && status < 300 ? 'success' : 'error'} 
-                  size='small' 
+                <Chip
+                  label={`Status: ${status}`}
+                  color={status >= 200 && status < 300 ? 'success' : 'error'}
+                  size='small'
                   variant='tonal'
                 />
               )}
             </Box>
-            
+
             {response && (
-              <Button 
-                size='small' 
+              <Button
+                size='small'
                 variant='outlined'
                 startIcon={<i className='tabler-copy' />}
                 onClick={copyToClipboard}
@@ -150,12 +175,12 @@ const ApiTestPage = () => {
 
           {/* Área de Resposta */}
           <Box
-            component="pre"
+            component='pre'
             sx={{
               p: 4,
               borderRadius: 1,
-              backgroundColor: 'action.hover', 
-              color: 'text.primary',          
+              backgroundColor: 'action.hover',
+              color: 'text.primary',
               border: '1px solid',
               borderColor: 'divider',
               overflow: 'auto',
@@ -165,12 +190,11 @@ const ApiTestPage = () => {
               fontFamily: 'monospace'
             }}
           >
-            {response 
-              ? JSON.stringify(response, null, 2) 
-              : '// Selecione a rota acima e clique em Enviar para ver a resposta...'}
+            {response
+              ? JSON.stringify(response, null, 2)
+              : '// Selecione "Conta Azul", insira ID 1 e teste a rota /v1/sales'}
           </Box>
         </Box>
-
       </CardContent>
     </Card>
   )

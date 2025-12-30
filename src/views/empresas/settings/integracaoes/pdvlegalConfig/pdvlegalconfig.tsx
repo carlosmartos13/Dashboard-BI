@@ -17,7 +17,7 @@ import Box from '@mui/material/Box'
 import { toast } from 'react-toastify'
 
 // Component Imports
-import DialogCloseButton from './DialogCloseButton'
+import DialogCloseButton from '../DialogCloseButton'
 
 type PaymentProvidersProps = {
   open: boolean
@@ -38,7 +38,7 @@ const PdvlegalConfig = ({ open, setOpen }: PaymentProvidersProps) => {
     if (open) {
       const fetchConfig = async () => {
         try {
-          const res = await fetch('/api/pdv-config')
+          const res = await fetch('/api/integracoes/api-pdvLegal/pdv-config')
           const data = await res.json()
           
           if (res.ok && !data.empty) {
@@ -65,7 +65,7 @@ const PdvlegalConfig = ({ open, setOpen }: PaymentProvidersProps) => {
   const handleConnect = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/pdv-config', {
+      const response = await fetch('/api/integracoes/api-pdvLegal/pdv-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
