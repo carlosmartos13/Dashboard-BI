@@ -84,6 +84,7 @@ const VerticalMenu = ({ dictionary, scrollMenu }: Props) => {
         
        <MenuSection label='INCIO DO SISTEMA'>
           <MenuItem href={`/${locale}/empresas/config`} icon={<i className='tabler-building-cog'/>} >Empresa</MenuItem>
+          <MenuItem href={`/${locale}/CLIENTES/lista`} icon={<i className='tabler-list-check'/>} >Clientes</MenuItem>
          </MenuSection>
 
 

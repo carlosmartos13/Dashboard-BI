@@ -1,5 +1,5 @@
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -7,6 +7,92 @@ generator client {
   provider        = "prisma-client-js"
   binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-1.1.x", "rhel-openssl-3.0.x"]
 }
+
+model PdvIntegration {
+  id           Int      @id @default(autoincrement())
+  username     String
+  password     String
+  clientId     String
+  clientSecret String
+  accessToken  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("pdv_integrations")
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  cnpj      String   @unique
+  name      String   // Razão Social
+  tradeName String?  // Nome Fantasia
+  email     String?
+  
+  // Endereço
+  cep         String?
+  street      String?
+  number      String?
+  complement  String?
+  neighborhood String?
+  city        String?
+  state       String?
+  country     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("companies")
+}
+
+
+// adicionar filiais do pdvlegal
+
+// Armazena os grupos (PAIZAO ESPETINHOS, BEBIDAS, etc)
+model PdvLicencaGrupo {
+  id               Int      @id @default(autoincrement())
+  codGrupo         Int      @unique // O 'codgrupo' da API. Unique para evitar duplicatas.
+  nome             String   // nomegrupo
+  documento        String?  // cpf_cnpj
+  ativo            Boolean
+  produto          String?  // GESTAO LEGAL, DELIVERY LEGAL, etc
+  qtdLojasAtivas   Int
+  qtdLojasDesativadas Int
+  dataCadastroApi  DateTime? // datacadastro vindo da API
+
+  // Relacionamento: Um grupo tem várias filiais
+  filiais          PdvLicencaFilial[]
+
+  // Controles internos do nosso banco
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("pdv_licenca_grupos")
+}
+
+// Armazena as filiais dentro de cada grupo
+model PdvLicencaFilial {
+  id               Int      @id @default(autoincrement())
+  sistema         String?  @default("PDVLEGAL")
+  codGrupo         Int      
+  codFilial        Int      @unique // O 'codfilial' da API
+  nome             String   // nomefilial
+  documento        String?  // cpf_cnpj
+  ativo            Boolean
+  matriz           Boolean  // matriz (true/false)
+  email            String?
+  dataCadastroApi  DateTime? // datacadastro vindo da API
+   
+
+  // Chave estrangeira ligando ao Grupo
+  grupoId          Int
+  grupo            PdvLicencaGrupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("pdv_licenca_filiais")
+}
+
 
 model Account {
   id                 String  @id @default(cuid())
@@ -52,3 +138,5 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+
