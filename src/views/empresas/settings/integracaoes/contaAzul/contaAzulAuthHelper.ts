@@ -2,8 +2,8 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-export async function getValidToken(empresaId: number) {
-  // 1. Busca a configuração no banco
+// Adicionamos o parâmetro opcional 'forceRefresh'
+export async function getValidToken(empresaId: number, forceRefresh: boolean = false) {
   const config = await prisma.integracaoContaAzul.findUnique({
     where: { empresaId }
   })
@@ -12,23 +12,22 @@ export async function getValidToken(empresaId: number) {
     throw new Error('Integração não configurada ou tokens ausentes.')
   }
 
-  // 2. Verifica se está expirado
-  // O updatedAt diz quando o token foi salvo. O expiresIn diz quantos segundos dura (3600).
-  // Vamos dar uma margem de segurança de 5 minutos (300 segundos) para não correr risco.
   const now = new Date()
   const tokenDate = new Date(config.updatedAt)
   const expirationSeconds = config.expiresIn || 3600
+
+  // Data exata que vence
   const expirationDate = new Date(tokenDate.getTime() + expirationSeconds * 1000)
 
-  // Se "Agora" for maior que "Data de Expiração - 5 minutos", precisa renovar
-  const isExpired = now.getTime() > expirationDate.getTime() - 300000
+  // Margem de segurança: 10 minutos (600.000 ms) antes de vencer, já consideramos vencido
+  const isExpired = now.getTime() > expirationDate.getTime() - 600000
 
-  if (!isExpired) {
-    return config.accessToken // Token ainda vale, retorna ele mesmo
+  // Se não foi forçado e não expirou, retorna o atual
+  if (!forceRefresh && !isExpired) {
+    return config.accessToken
   }
 
-  // 3. O Token venceu! Vamos renovar (Refresh Flow)
-  console.log(`Token da empresa ${empresaId} expirou. Renovando...`)
+  console.log(`🔄 Renovando token da empresa ${empresaId} (Forçado: ${forceRefresh})...`)
 
   const cleanClientId = config.clientId.trim()
   const cleanClientSecret = config.clientSecret.trim()
@@ -51,22 +50,19 @@ export async function getValidToken(empresaId: number) {
 
     if (!response.ok) {
       console.error('Erro ao renovar token:', data)
-      throw new Error('Falha ao renovar token Conta Azul')
+      // Se der erro no refresh (ex: refresh token expirado), lançamos erro para o usuário logar de novo
+      throw new Error('Sessão expirada. Faça login na Conta Azul novamente.')
     }
 
-    // 4. Salva os novos tokens no banco
+    // Salva os novos tokens no banco
     await prisma.integracaoContaAzul.update({
       where: { empresaId },
       data: {
         accessToken: data.access_token,
-        refreshToken: data.refresh_token, // O refresh token TAMBÉM muda
+        refreshToken: data.refresh_token,
         expiresIn: data.expires_in
-
-        // O updatedAt atualiza sozinho graças ao @updatedAt do Prisma
       }
     })
-
-    console.log('Token renovado com sucesso!')
 
     return data.access_token
   } catch (error) {

@@ -40,7 +40,7 @@ model Company {
   country     String?
   contaAzul    IntegracaoContaAzul?
   clientesCA      ContaAzulCliente[]
-
+  recebimentosCA ContaAzulRecebimento[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -162,13 +162,9 @@ model IntegracaoContaAzul {
 
 model ContaAzulCliente {
   id              String   @id @default(uuid()) // Nosso ID interno do sistema
-
-  // Identificadores da Conta Azul
   caId            String   @unique              // O campo "id" do JSON (UUID deles)
   idLegado        Int?                          // O campo "id_legado"
   uuidLegado      String?                       // O campo "uuid_legado"
-
-  // Dados principais
   nome            String
   documento       String?                       // CPF ou CNPJ
   email           String?
@@ -177,25 +173,47 @@ model ContaAzulCliente {
   tipoPessoa      String?                       // "Jurídica" ou "Física"
   perfis          String[]                      // Array de strings ["Cliente", "Fornecedor"]
   observacoes     String?  @db.Text             // "observacoes_gerais"
-
-  // Datas vindas da API (Controle deles)
   dataCriacaoCA   DateTime?                     // "data_criacao" do JSON
   dataAlteracaoCA DateTime?                     // "data_alteracao" do JSON
-
-  // Nossas datas (Controle de sincronização)
   createdAt       DateTime @default(now())      // Quando sincronizamos a primeira vez
   updatedAt       DateTime @updatedAt           // Última vez que o nosso sistema atualizou
-
-  // --- NOVOS CAMPOS: DADOS DO CONTRATO ---
   contratoId         String?   @unique // ID do contrato na CA (para evitar duplicidade em outros clientes)
   contratoStatus     String?   // "ATIVO", "INATIVO"
   contratoNumero     Int?      // Numero do contrato
   contratoInicio     DateTime?
   contratoVencimento DateTime? // Proximo Vencimento
-
-  // Relacionamento com a Empresa do seu SaaS
+  recebimentos ContaAzulRecebimento[]
   empresaId       Int
   empresa         Company  @relation(fields: [empresaId], references: [id])
-
   @@map("conta_azul_clientes")
+}
+
+// --- NOVO MODEL: FINANCEIRO ---
+model ContaAzulRecebimento {
+  id              String   @id @default(uuid()) // Nosso ID interno
+
+  // Mapeamento solicitado
+  id_ca_receber   String   @unique              // "id" do JSON
+  status          String                        // "OVERDUE", "ACQUITTED"
+  total           Float                         // "total"
+  Venda_CA        String                        // "descricao"
+  data_vencimento DateTime                      // "data_vencimento"
+  Venda_Status    String                        // "status_traduzido"
+  Venda_A_Receber Float                         // "nao_pago"
+  Venda_Pago      Float                         // "pago"
+  Venda_dtCriacao DateTime                      // "data_criacao"
+  Venda_DtUpdate  DateTime                      // "data_alteracao"
+
+  client_id       String                        // "cliente.id" (ID da Conta Azul)
+  client_nome     String                        // "cliente.nome"
+
+  cliente         ContaAzulCliente @relation(fields: [client_id], references: [caId])
+
+  empresaId       Int
+  empresa         Company          @relation(fields: [empresaId], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("conta_azul_recebimentos")
 }

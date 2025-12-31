@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
-
 import { PrismaClient } from '@prisma/client'
-
-import { getValidToken } from '@/views/empresas/settings/integracaoes/contaAzul/contaAzulAuthHelper' // Seu arquivo helper
+import { getValidToken } from '@/views/empresas/settings/integracaoes/contaAzul/contaAzulAuthHelper'
 
 const prisma = new PrismaClient()
 
-// Configuração para evitar timeout em sincronizações grandes
-export const maxDuration = 60 // 60 segundos (Vercel/NextJS config)
+// Aumentei o tempo limite para 5 minutos, pois agora o script vai rodar mais devagar
+export const maxDuration = 300
+
+// Função de pausa (Freio da API)
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 export async function POST(request: Request) {
   try {
@@ -18,19 +19,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'EmpresaID é obrigatório' }, { status: 400 })
     }
 
-    // 1. Garante Token Válido
     const accessToken = await getValidToken(Number(empresaId))
 
-    // Configurações da Paginação
     const baseUrl = 'https://api-v2.contaazul.com/v1/pessoas'
     let paginaAtual = 1
-    const tamanhoPagina = 20 // Traz 20 por vez para não sobrecarregar
+    const tamanhoPagina = 20
     let temMaisPaginas = true
     let totalSincronizados = 0
 
-    // 2. Loop de Paginação (Busca até acabar)
+    console.log('--- INICIANDO SYNC CLIENTES (COM DELAY) ---')
+
     while (temMaisPaginas) {
-      console.log(`Buscando página ${paginaAtual}...`)
+      console.log(`⏳ Aguardando... (Rate Limit)`)
+      await sleep(300) // <--- O SEGREDO: Pausa de 300ms antes de cada chamada
+
+      console.log(`📡 Buscando página ${paginaAtual}...`)
 
       const url = `${baseUrl}?pagina=${paginaAtual}&tamanho_pagina=${tamanhoPagina}`
 
@@ -41,35 +44,34 @@ export async function POST(request: Request) {
         }
       })
 
+      // Se der erro 429 mesmo com o sleep, vamos tentar esperar mais um pouco e tentar de novo (Retry simples)
+      if (response.status === 429) {
+        console.warn('⚠️ Rate Limit atingido! Esperando 2 segundos...')
+        await sleep(2000)
+        continue // Tenta a mesma página de novo
+      }
+
       if (!response.ok) {
         const errorText = await response.text()
-
         throw new Error(`Erro na API Conta Azul: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
       const items = data.items || []
 
-      // Se não vier nada, para o loop
       if (items.length === 0) {
         temMaisPaginas = false
         break
       }
 
-      // 3. Processamento em Lote (Upsert)
-      // Usamos Promise.all para salvar os 20 de uma vez (mais rápido)
+      // Processamento em Lote
       await Promise.all(
         items.map(async (cliente: any) => {
-          // Tratamento de datas (se vier null, ignora)
           const dataCriacao = cliente.data_criacao ? new Date(cliente.data_criacao) : null
           const dataAlteracao = cliente.data_alteracao ? new Date(cliente.data_alteracao) : null
 
           return prisma.contaAzulCliente.upsert({
-            where: {
-              caId: cliente.id // Busca pelo ID Único da Conta Azul
-            },
-
-            // SE JÁ EXISTE: Atualiza os dados
+            where: { caId: cliente.id },
             update: {
               nome: cliente.nome,
               documento: cliente.documento,
@@ -77,14 +79,10 @@ export async function POST(request: Request) {
               telefone: cliente.telefone,
               ativo: cliente.ativo,
               tipoPessoa: cliente.tipo_pessoa,
-              perfis: cliente.perfis || [], // Salva o array ["Cliente", "Fornecedor"]
+              perfis: cliente.perfis || [],
               observacoes: cliente.observacoes_gerais,
               dataAlteracaoCA: dataAlteracao
-
-              // Não atualizamos o createdAt nosso
             },
-
-            // SE NÃO EXISTE: Cria novo
             create: {
               caId: cliente.id,
               idLegado: cliente.id_legado,
@@ -99,8 +97,6 @@ export async function POST(request: Request) {
               observacoes: cliente.observacoes_gerais,
               dataCriacaoCA: dataCriacao,
               dataAlteracaoCA: dataAlteracao,
-
-              // Conecta com a sua empresa
               empresa: {
                 connect: { id: Number(empresaId) }
               }
@@ -111,8 +107,6 @@ export async function POST(request: Request) {
 
       totalSincronizados += items.length
 
-      // Verifica se precisa buscar a próxima página
-      // Se a quantidade que veio é menor que o tamanho da página, acabou
       if (items.length < tamanhoPagina) {
         temMaisPaginas = false
       } else {
@@ -122,12 +116,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Sincronização concluída! ${totalSincronizados} clientes processados.`,
+      message: `Sync Clientes OK: ${totalSincronizados} processados.`,
       total: totalSincronizados
     })
   } catch (error: any) {
     console.error('Erro Sync Clientes:', error)
-
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

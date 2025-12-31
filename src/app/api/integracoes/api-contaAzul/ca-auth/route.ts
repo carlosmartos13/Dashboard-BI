@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-export const dynamic = 'force-dynamic' 
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   // URL DE RETORNO (Ngrok)
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integracoes/api-contaAzul/ca-callback`
-  
+
   const state = empresaId.toString()
 
   const params = new URLSearchParams({
@@ -30,13 +30,13 @@ export async function GET(request: Request) {
     state: state,
     // AQUI ESTÁ A CORREÇÃO: Usamos o escopo que funcionou no seu link manual
     // Nota: O URLSearchParams troca os espaços por '+' automaticamente
-    scope: 'openid profile aws.cognito.signin.user.admin' 
+    scope: 'openid profile aws.cognito.signin.user.admin'
   })
 
   // Usamos o endpoint de login direto
   const url = `https://auth.contaazul.com/login?${params.toString()}`
 
-  console.log("Redirecionando para:", url) 
+  console.log('Redirecionando para:', url)
 
   return NextResponse.redirect(url)
 }

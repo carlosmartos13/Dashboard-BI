@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     const accessToken = await getValidToken(Number(empresaId))
 
-    // Intervalo de busca (ajuste conforme necessidade)
+    // Filtros amplos para garantir que venha tudo
     const dataInicioBusca = '2015-01-01'
     const dataFimBusca = '2030-12-31'
 
@@ -25,9 +25,9 @@ export async function POST(request: Request) {
     let totalProcessados = 0
     let clientesAtualizados = 0
 
-    while (temMaisPaginas) {
-      console.log(`Buscando Contratos - Página ${paginaAtual}...`)
+    console.log('--- INICIANDO SYNC CONTRATOS ---')
 
+    while (temMaisPaginas) {
       const params = new URLSearchParams({
         pagina: paginaAtual.toString(),
         tamanho_pagina: tamanhoPagina.toString(),
@@ -35,7 +35,10 @@ export async function POST(request: Request) {
         data_fim: dataFimBusca
       })
 
-      const response = await fetch(`${baseUrl}?${params.toString()}`, {
+      const fullUrl = `${baseUrl}?${params.toString()}`
+      console.log(`📡 Buscando URL: ${fullUrl}`)
+
+      const response = await fetch(fullUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
@@ -48,44 +51,59 @@ export async function POST(request: Request) {
       }
 
       const data = await response.json()
-      // A API pode retornar 'items' ou 'itens', garantindo os dois:
+
+      // LOG IMPORTANTE: Ver o que a API devolveu
+      // A Conta Azul as vezes manda 'items', as vezes 'itens', as vezes nada.
       const listaContratos = data.items || data.itens || []
 
+      console.log(`📄 Página ${paginaAtual}: Encontrados ${listaContratos.length} contratos na API.`)
+
       if (listaContratos.length === 0) {
+        console.log('🚫 Nenhum contrato nesta página. Encerrando paginação.')
         temMaisPaginas = false
         break
       }
 
-      // Processamento paralelo
       await Promise.all(
         listaContratos.map(async (contrato: any) => {
-          // Se não tem ID de cliente vinculado no contrato, ignora
-          if (!contrato.cliente || !contrato.cliente.id) return
+          // Validação básica
+          if (!contrato.cliente || !contrato.cliente.id) {
+            console.log(`⚠️ Contrato ${contrato.numero} ignorado: Sem ID de Cliente.`)
+            return
+          }
 
-          // Tratamento de datas
-          const dtInicio = contrato.data_inicio ? new Date(contrato.data_inicio + 'T12:00:00') : null
-          const dtVencimento = contrato.proximo_vencimento ? new Date(contrato.proximo_vencimento + 'T12:00:00') : null
+          const clienteIdNaAPI = contrato.cliente.id
 
           try {
-            // Tenta atualizar o Cliente existente com os dados deste contrato
-            await prisma.contaAzulCliente.update({
+            // Tenta achar e atualizar
+            const resultado = await prisma.contaAzulCliente.update({
               where: {
-                caId: contrato.cliente.id // Procura o cliente pelo ID da Conta Azul
+                caId: clienteIdNaAPI // Busca pelo UUID da Conta Azul
               },
               data: {
                 contratoId: contrato.id,
                 contratoStatus: contrato.status,
                 contratoNumero: contrato.numero,
-                contratoInicio: dtInicio,
-                contratoVencimento: dtVencimento
-                // O updatedAt atualiza sozinho
+                // Tratamento de data seguro
+                contratoInicio: contrato.data_inicio ? new Date(contrato.data_inicio + 'T12:00:00') : null,
+                contratoVencimento: contrato.proximo_vencimento
+                  ? new Date(contrato.proximo_vencimento + 'T12:00:00')
+                  : null
               }
             })
+
+            // Se chegou aqui, funcionou
+            console.log(`✅ Contrato ${contrato.numero} vinculado ao cliente ${resultado.nome}`)
             clientesAtualizados++
-          } catch (error) {
-            // Se der erro (ex: Cliente não foi sincronizado antes e não existe no banco),
-            // Apenas logamos e continuamos. Não queremos quebrar o loop.
-            // console.warn(`Cliente ${contrato.cliente.nome} não encontrado para vincular contrato.`)
+          } catch (error: any) {
+            // AQUI ESTÁ O ERRO QUE ESTAVA ESCONDIDO
+            if (error.code === 'P2025') {
+              console.error(
+                `❌ Falha: Cliente não existe no banco. (ID CA: ${clienteIdNaAPI} - Nome: ${contrato.cliente.nome})`
+              )
+            } else {
+              console.error(`❌ Erro Prisma genérico no contrato ${contrato.numero}:`, error.message)
+            }
           }
         })
       )
@@ -99,14 +117,16 @@ export async function POST(request: Request) {
       }
     }
 
+    console.log('--- FIM SYNC CONTRATOS ---')
+
     return NextResponse.json({
       success: true,
-      message: `Processo finalizado. ${totalProcessados} contratos lidos, ${clientesAtualizados} clientes atualizados.`,
+      message: `Fim. ${totalProcessados} contratos lidos. ${clientesAtualizados} vinculados com sucesso.`,
       total: totalProcessados,
       atualizados: clientesAtualizados
     })
   } catch (error: any) {
-    console.error('Erro Sync Contratos:', error)
+    console.error('🔥 Erro CRÍTICO Sync Contratos:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
