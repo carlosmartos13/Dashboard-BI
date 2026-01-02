@@ -6,13 +6,13 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/',
-        destination: '/pt_BR/dashboards/crm',
+        destination: '/pt_BR/empresas/config',
         permanent: true,
         locale: false
       },
       {
         source: '/:lang(pt_BR|en)',
-        destination: '/:lang/dashboards/crm',
+        destination: '/:lang/empresas/config',
         permanent: true,
         locale: false
       },
