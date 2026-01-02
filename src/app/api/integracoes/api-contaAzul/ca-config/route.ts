@@ -1,65 +1,45 @@
 import { NextResponse } from 'next/server'
+
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-// GET: Busca config
+export const dynamic = 'force-dynamic'
+
+// GET: Verifica status da conexão
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const empresaIdParam = searchParams.get('empresaId')
-    
-    // Converte para Inteiro
     const empresaId = empresaIdParam ? parseInt(empresaIdParam) : null
 
-    // Validação de segurança
+    // Validação inicial
     if (!empresaId || isNaN(empresaId)) {
-      return NextResponse.json({ error: 'Faltando empresaId válido' }, { status: 400 })
+      return NextResponse.json({ error: 'Faltando empresaId válido na URL' }, { status: 400 })
     }
 
+    // Buscamos apenas se existe um token salvo para essa empresa
     const config = await prisma.integracaoContaAzul.findUnique({
-      where: { empresaId } 
+      where: { empresaId },
+      select: { accessToken: true } 
     })
 
-    // Retorna a config ou null (se não existir, o front trata)
-    return NextResponse.json(config || {})
+    // Se tiver accessToken, consideramos conectado
+    const isConnected = !!config?.accessToken
 
-  } catch (error) {
-    console.error("Erro GET Config:", error)
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
-  }
-}
+    return NextResponse.json({ 
+      isConnected,
 
-// POST: Salva config
-export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { client_id, client_secret, empresaId } = body
-
-    // AJUSTE DE SEGURANÇA: Garante que é número
-    const idNumerico = Number(empresaId)
-
-    if (!idNumerico || isNaN(idNumerico)) {
-      return NextResponse.json({ error: 'Faltando empresaId válido' }, { status: 400 })
-    }
-
-    const config = await prisma.integracaoContaAzul.upsert({
-      where: { empresaId: idNumerico }, // Usa o ID numérico
-      update: { 
-        clientId: client_id, 
-        clientSecret: client_secret 
-      },
-      create: { 
-        empresaId: idNumerico, 
-        clientId: client_id, 
-        clientSecret: client_secret 
-      }
+      // Não retornamos chaves sensíveis
     })
 
-    return NextResponse.json(config)
-
-  } catch (error) {
-    console.error("Erro POST Config:", error)
-    return NextResponse.json({ error: 'Erro ao salvar' }, { status: 500 })
+  } catch (error: any) {
+    console.error("❌ Erro GET Status:", error)
+    
+    // MELHORIA: Retorna a mensagem técnica do erro (ex: falha de conexão com banco)
+    // Isso permite que o Toast do frontend mostre o motivo real
+    return NextResponse.json({ 
+        error: error.message || 'Erro desconhecido ao verificar status da conexão.' 
+    }, { status: 500 })
   }
 }

@@ -1,42 +1,54 @@
 import { NextResponse } from 'next/server'
+
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const state = searchParams.get('state') 
 
+  // 1. Validações Iniciais
   if (!code || !state) {
-    return NextResponse.json({ error: 'Código ou State inválido' }, { status: 400 })
+    return NextResponse.json({ error: 'Código ou State inválido recebido da Conta Azul' }, { status: 400 })
   }
 
-  // 1. Correção de segurança do Prisma (String -> Int)
   const empresaId = parseInt(state)
+
   if (isNaN(empresaId)) {
-     return NextResponse.json({ error: 'ID da empresa inválido' }, { status: 400 })
+     return NextResponse.json({ error: 'ID da empresa inválido no State' }, { status: 400 })
   }
 
-  const config = await prisma.integracaoContaAzul.findUnique({ where: { empresaId } })
+  // 2. Busca Credenciais do .ENV
+  const clientId = process.env.CONTA_AZUL_CLIENT_ID
+  const clientSecret = process.env.CONTA_AZUL_CLIENT_SECRET
+  const serverHost = process.env.NEXT_PUBLIC_SERVER_HOST || process.env.NEXT_PUBLIC_APP_URL
 
-  if (!config) return NextResponse.json({ error: 'Configuração não encontrada' })
+  if (!clientId || !clientSecret || !serverHost) {
+    console.error("❌ ERRO CRÍTICO: Variáveis de ambiente faltando.")
+    
+return NextResponse.json({ error: 'Erro de configuração no servidor (ENV)' }, { status: 500 })
+  }
 
-  // Limpa espaços vazios que podem ter vindo do copiar/colar
-  const cleanClientId = config.clientId.trim()
-  const cleanClientSecret = config.clientSecret.trim()
-
-  // 2. GERA O BASE64 (Exatamente como o manual pede)
-  const basicAuth = Buffer.from(`${cleanClientId}:${cleanClientSecret}`).toString('base64')
-
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integracoes/api-contaAzul/ca-callback`
+  // 3. Monta a Autenticação (BASIC AUTH - HEADER)
+  // Nota: O .trim() é vital caso tenha copiado com espaços do site
+  const credentials = `${clientId.trim()}:${clientSecret.trim()}`
+  const basicAuth = Buffer.from(credentials).toString('base64')
+  
+  // A Redirect URI deve ser EXATAMENTE igual à enviada no passo 1
+  const redirectUri = `${serverHost}/api/integracoes/api-contaAzul/ca-callback`
   
   try {
-    // 3. URL CORRETA (auth.contaazul.com)
+    console.log('🔄 Trocando Code por Token na URL auth.contaazul.com...')
+
+    // 4. Troca o CODE pelo TOKEN (URL CORRETA AGORA)
     const tokenResponse = await fetch('https://auth.contaazul.com/oauth2/token', {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${basicAuth}`, // Envia o Base64 no Header
+        'Authorization': `Basic ${basicAuth}`, // Cabeçalho obrigatório conforme documentação
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: new URLSearchParams({
@@ -48,26 +60,44 @@ export async function GET(request: Request) {
 
     const tokenData = await tokenResponse.json()
 
+    // Se der erro, loga o detalhe que veio da Conta Azul
     if (!tokenResponse.ok) {
-      console.error("Erro Conta Azul:", tokenData)
-      // Se der erro, mostra na tela para facilitar o debug
-      return NextResponse.json({ error: tokenData }, { status: 400 })
+      console.error("❌ Erro da Conta Azul:", tokenData)
+      
+return NextResponse.json({ 
+        error: 'Falha na troca de token.', 
+        detalhes: tokenData 
+      }, { status: 400 })
     }
 
-    // Salva os tokens
-    await prisma.integracaoContaAzul.update({
+    // 5. Salva os Tokens no Banco (UPSERT)
+    await prisma.integracaoContaAzul.upsert({
       where: { empresaId },
-      data: {
+      update: {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        expiresIn: tokenData.expires_in
+      },
+      create: {
+        empresaId,
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh_token,
         expiresIn: tokenData.expires_in
       }
     })
 
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/apps/empresas/config?success=true`)
+    console.log(`✅ Sucesso! Conexão realizada para empresa ${empresaId}`)
 
-  } catch (error) {
-    console.error("Erro Callback:", error)
-    return NextResponse.json({ error: 'Falha na autenticação OAuth' }, { status: 500 })
+    // 6. Redireciona de volta para a tela de configurações com flag de sucesso
+    return NextResponse.redirect(`${serverHost}/apps/empresas/config?success=true`)
+
+  } catch (error: any) {
+    console.error("❌ Erro Fatal no Callback:", error)
+    
+    if (error.code === 'P2003') {
+        return NextResponse.json({ error: 'Erro: A Empresa informada não existe no banco de dados local.' }, { status: 400 })
+    }
+
+    return NextResponse.json({ error: 'Falha interna na autenticação OAuth' }, { status: 500 })
   }
 }

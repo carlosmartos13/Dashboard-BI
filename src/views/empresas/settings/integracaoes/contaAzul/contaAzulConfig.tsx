@@ -1,87 +1,63 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+
+// MUI Imports
 import { 
-  Dialog, DialogContent, DialogTitle, Typography, TextField, 
-  Button, Grid, Box, Alert 
+  Dialog, DialogContent, DialogTitle, Typography, 
+  Button, Box, Alert, CircularProgress 
 } from '@mui/material'
-import { toast } from 'react-toastify'
+import Grid from '@mui/material/Grid' // Verifique se é Grid v2 ou v1 no seu projeto
+import { toast } from 'react-toastify' // ou 'react-toastify'
+
 import DialogCloseButton from '../DialogCloseButton'
 
 type Props = {
   open: boolean
   setOpen: (open: boolean) => void
-  empresaId: string | number // Aceita string ou numero, pois o backend converte
+  empresaId: number
 }
 
 const ContaAzulConfig = ({ open, setOpen, empresaId }: Props) => {
-  const [formData, setFormData] = useState({ client_id: '', client_secret: '' })
   const [isConnected, setIsConnected] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // URL base para suas rotas
   const API_BASE = '/api/integracoes/api-contaAzul'
 
-  // 1. Carregar configuração existente
+  // Ao abrir, verifica se já está conectado
   useEffect(() => {
-    // Só busca se o modal estiver aberto E tivermos um ID de empresa
     if (open && empresaId) {
-      fetchConfig()
+      checkStatus()
     }
   }, [open, empresaId])
 
-  const fetchConfig = async () => {
+  const checkStatus = async () => {
+    setLoading(true)
+
     try {
       const res = await fetch(`${API_BASE}/ca-config?empresaId=${empresaId}`)
       const data = await res.json()
       
-      if (res.ok && data && !data.error) {
-        setFormData({ 
-          client_id: data.clientId || '', 
-          client_secret: data.clientSecret || '' 
-        })
-        // Verifica se existe accessToken salvo no banco
-        setIsConnected(!!data.accessToken)
-      }
-    } catch (error) {
-      console.error("Erro ao buscar config:", error)
-    }
-  }
-
-  const handleSaveCredentials = async () => {
-    if (!formData.client_id || !formData.client_secret) {
-        toast.warning("Preencha os dois campos.")
-        return
-    }
-
-    setLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/ca-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Enviamos o formData e o empresaId (o backend vai converter para Int)
-        body: JSON.stringify({ ...formData, empresaId })
-      })
-      
-      if (res.ok) {
-        toast.success('Credenciais salvas! Agora clique em Autorizar.')
-        fetchConfig() // Recarrega para ter certeza
+      if (res.ok && data.isConnected) {
+        setIsConnected(true)
       } else {
-        const errorData = await res.json()
-        toast.error(errorData.error || 'Erro ao salvar credenciais.')
+        setIsConnected(false)
       }
     } catch (error) {
-      toast.error('Erro de conexão.')
+      console.error("Erro status CA:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  // 2. Iniciar Fluxo OAuth
-  const handleOAuthConnect = () => {
+  // Ação de Redirecionar
+  const handleConnect = () => {
     if(!empresaId) return toast.error("Empresa não identificada")
     
-    // Redireciona o navegador
+    // Mostra loading rápido antes de sair
+    toast.loading("Redirecionando para Conta Azul...", {autoClose: 3000})
+    
+    // Redireciona para nossa rota de Auth que lê o .env e manda pra CA
     window.location.href = `${API_BASE}/ca-auth?empresaId=${empresaId}`
   }
 
@@ -91,7 +67,6 @@ const ContaAzulConfig = ({ open, setOpen, empresaId }: Props) => {
       open={open} 
       onClose={() => setOpen(false)} 
       maxWidth='sm'
-      // sx abaixo ajuda o conteúdo a não ficar colado na borda em telas pequenas
       sx={{ '& .MuiDialog-paper': { overflow: 'visible' } }}
     >
       <DialogCloseButton onClick={() => setOpen(false)} disableRipple>
@@ -99,70 +74,52 @@ const ContaAzulConfig = ({ open, setOpen, empresaId }: Props) => {
       </DialogCloseButton>
 
       <DialogTitle variant='h4' className='text-center sm:pbs-16 sm:pbe-6 sm:pli-16'>
-        Integração Conta Azul
+        Conectar Conta Azul
         <Typography component='div' variant="subtitle2" className='mt-2'>
-          Insira suas chaves de API e autorize o acesso.
+          Integração oficial para sincronização de dados.
         </Typography>
       </DialogTitle>
 
       <DialogContent className='pbs-0 sm:pbe-16 sm:pli-16'>
-        {/* Usando Grid container do MUI atualizado */}
-        <Grid container spacing={6}>
+        <Grid container spacing={4}>
+          
+          {/* Status da Conexão */}
           <Grid size={{ xs: 12 }}>
-            {isConnected ? (
+            {loading ? (
+               <Box className="flex justify-center p-4">
+                 <CircularProgress size={24} />
+               </Box>
+            ) : isConnected ? (
               <Alert severity="success" icon={<i className='tabler-check' />}>
-                Conectado e Autorizado!
+                <strong>Conectado!</strong> Esta empresa já possui um token de acesso válido.
               </Alert>
             ) : (
-              <Alert severity="warning" icon={<i className='tabler-alert-circle' />}>
-                Não conectado. Salve as chaves e clique em Autorizar.
+              <Alert severity="info" icon={<i className='tabler-info-circle' />}>
+                Ao clicar abaixo, você será redirecionado para o site da Conta Azul para autorizar o acesso.
               </Alert>
             )}
           </Grid>
 
+          {/* Botão de Ação */}
           <Grid size={{ xs: 12 }}>
-            <TextField 
-              fullWidth 
-              label='Client ID' 
-              placeholder='Ex: xxxxx-xxxx-xxxx-xxxx'
-              value={formData.client_id} 
-              onChange={e => setFormData({...formData, client_id: e.target.value})} 
-            />
-          </Grid>
-          
-          <Grid size={{ xs: 12 }}>
-            <TextField 
-              fullWidth 
-              type='password' 
-              label='Client Secret' 
-              placeholder='Ex: xxxxxxxxxxxxx'
-              value={formData.client_secret} 
-              onChange={e => setFormData({...formData, client_secret: e.target.value})} 
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12 }}>
-            <Box className='flex justify-between gap-4 mt-2'>
+            <Box className='flex justify-center mt-4'>
                 <Button 
                     variant='contained' 
-                    color="primary" 
-                    onClick={handleSaveCredentials} 
-                    disabled={loading}
-                    startIcon={loading ? <i className='tabler-loader-2 animate-spin'/> : <i className='tabler-device-floppy'/>}
-                >
-                1. Salvar Credenciais
-                </Button>
-
-                <Button 
-                    variant='contained' 
-                    color="success" 
-                    onClick={handleOAuthConnect}
-                    disabled={!formData.client_id || loading}
+                    size='large'
+                    color={isConnected ? "secondary" : "primary"} // Muda cor se já tiver conectado
+                    onClick={handleConnect}
                     endIcon={<i className='tabler-external-link'/>}
+                    sx={{ minWidth: '200px' }}
                 >
-                2. Autorizar
+                {isConnected ? "Reconectar / Atualizar Token" : "Conectar Agora"}
                 </Button>
             </Box>
+            
+            {isConnected && (
+                <Typography variant="caption" className="block text-center mt-2 text-gray-500">
+                    Clique para renovar a permissão se estiver enfrentando problemas.
+                </Typography>
+            )}
           </Grid>
         </Grid>
       </DialogContent>

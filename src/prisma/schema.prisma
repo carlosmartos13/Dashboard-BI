@@ -22,71 +22,65 @@ model PdvIntegration {
 }
 
 model Company {
-  id        Int      @id @default(autoincrement())
-  cnpj      String   @unique
-  name      String   // Razão Social
-  tradeName String?  // Nome Fantasia
+  id        Int     @id @default(autoincrement())
+  cnpj      String  @unique
+  name      String  // Razão Social
+  tradeName String? // Nome Fantasia
   email     String?
 
-
   // Endereço
-  cep         String?
-  street      String?
-  number      String?
-  complement  String?
+  cep          String?
+  street       String?
+  number       String?
+  complement   String?
   neighborhood String?
-  city        String?
-  state       String?
-  country     String?
-  contaAzul    IntegracaoContaAzul?
-  clientesCA      ContaAzulCliente[]
+  city         String?
+  state        String?
+  country      String?
+  
+  contaAzul      IntegracaoContaAzul?
+  clientesCA     ContaAzulCliente[]
   recebimentosCA ContaAzulRecebimento[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("companies")
 }
 
-
-// adicionar filiais do pdvlegal
-
 // Armazena os grupos (PAIZAO ESPETINHOS, BEBIDAS, etc)
 model PdvLicencaGrupo {
-  id               Int      @id @default(autoincrement())
-  codGrupo         Int      @unique // O 'codgrupo' da API. Unique para evitar duplicatas.
-  nome             String   // nomegrupo
-  documento        String?  // cpf_cnpj
-  ativo            Boolean
-  produto          String?  // GESTAO LEGAL, DELIVERY LEGAL, etc
-  qtdLojasAtivas   Int
+  id           Int      @id @default(autoincrement())
+  codGrupo     Int      @unique 
+  nome         String   
+  documento    String?  
+  ativo        Boolean
+  produto      String?  
+  qtdLojasAtivas    Int
   qtdLojasDesativadas Int
-  dataCadastroApi  DateTime? // datacadastro vindo da API
+  dataCadastroApi   DateTime? 
 
-  // Relacionamento: Um grupo tem várias filiais
-  filiais          PdvLicencaFilial[]
+  filiais           PdvLicencaFilial[]
 
-  // Controles internos do nosso banco
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@map("pdv_licenca_grupos")
 }
 
 // Armazena as filiais dentro de cada grupo
 model PdvLicencaFilial {
-  id               Int      @id @default(autoincrement())
-  sistema         String?  @default("PDVLEGAL")
-  codGrupo         Int
-  codFilial        Int      @unique // O 'codfilial' da API
-  nome             String   // nomefilial
-  documento        String?  // cpf_cnpj
-  ativo            Boolean
-  matriz           Boolean  // matriz (true/false)
-  email            String?
-  dataCadastroApi  DateTime? // datacadastro vindo da API
+  id           Int      @id @default(autoincrement())
+  sistema      String?  @default("PDVLEGAL")
+  codGrupo     Int
+  codFilial    Int      @unique 
+  nome         String   
+  documento    String?  
+  ativo        Boolean
+  matriz       Boolean  
+  email        String?
+  dataCadastroApi  DateTime? 
 
-
-  // Chave estrangeira ligando ao Grupo
   grupoId          Int
   grupo            PdvLicencaGrupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
 
@@ -96,20 +90,19 @@ model PdvLicencaFilial {
   @@map("pdv_licenca_filiais")
 }
 
-
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -142,70 +135,71 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-
+// --- ALTERAÇÃO AQUI ---
+// Removemos clientId e clientSecret do banco.
+// Mantemos apenas os tokens de acesso.
 model IntegracaoContaAzul {
-  id            String   @id @default(uuid())
-  clientId      String
-  clientSecret  String
-  accessToken   String?  @db.Text
-  refreshToken  String?  @db.Text
-  expiresIn     Int?
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  
+  accessToken  String?  @db.Text
+  refreshToken String?  @db.Text
+  expiresIn    Int?
+  updatedAt    DateTime @updatedAt
 
-  empresaId     Int      @unique
-  empresa       Company  @relation(fields: [empresaId], references: [id])
+  empresaId    Int      @unique
+  empresa      Company  @relation(fields: [empresaId], references: [id])
 
   @@map("integracao_conta_azul")
 }
 
-
-
 model ContaAzulCliente {
-  id              String   @id @default(uuid()) // Nosso ID interno do sistema
-  caId            String   @unique              // O campo "id" do JSON (UUID deles)
-  idLegado        Int?                          // O campo "id_legado"
-  uuidLegado      String?                       // O campo "uuid_legado"
+  id              String   @id @default(uuid()) 
+  caId            String   @unique             
+  idLegado        Int?                          
+  uuidLegado      String?                       
   nome            String
-  documento       String?                       // CPF ou CNPJ
+  documento       String?                       
   email           String?
   telefone        String?
   ativo           Boolean  @default(true)
-  tipoPessoa      String?                       // "Jurídica" ou "Física"
-  perfis          String[]                      // Array de strings ["Cliente", "Fornecedor"]
-  observacoes     String?  @db.Text             // "observacoes_gerais"
-  dataCriacaoCA   DateTime?                     // "data_criacao" do JSON
-  dataAlteracaoCA DateTime?                     // "data_alteracao" do JSON
-  createdAt       DateTime @default(now())      // Quando sincronizamos a primeira vez
-  updatedAt       DateTime @updatedAt           // Última vez que o nosso sistema atualizou
-  contratoId         String?   @unique // ID do contrato na CA (para evitar duplicidade em outros clientes)
-  contratoStatus     String?   // "ATIVO", "INATIVO"
-  contratoNumero     Int?      // Numero do contrato
+  tipoPessoa      String?                       
+  perfis          String[]                      
+  observacoes     String?  @db.Text             
+  dataCriacaoCA   DateTime?                     
+  dataAlteracaoCA DateTime?                     
+  createdAt       DateTime @default(now())      
+  updatedAt       DateTime @updatedAt           
+  
+  contratoId         String?   @unique 
+  contratoStatus     String?   
+  contratoNumero     Int?      
   contratoInicio     DateTime?
-  contratoVencimento DateTime? // Proximo Vencimento
+  contratoVencimento DateTime? 
+  
   recebimentos ContaAzulRecebimento[]
+  
   empresaId       Int
   empresa         Company  @relation(fields: [empresaId], references: [id])
+  
   @@map("conta_azul_clientes")
 }
 
-// --- NOVO MODEL: FINANCEIRO ---
 model ContaAzulRecebimento {
-  id              String   @id @default(uuid()) // Nosso ID interno
+  id              String   @id @default(uuid()) 
 
-  // Mapeamento solicitado
-  id_ca_receber   String   @unique              // "id" do JSON
-  status          String                        // "OVERDUE", "ACQUITTED"
-  total           Float                         // "total"
-  Venda_CA        String                        // "descricao"
-  data_vencimento DateTime                      // "data_vencimento"
-  Venda_Status    String                        // "status_traduzido"
-  Venda_A_Receber Float                         // "nao_pago"
-  Venda_Pago      Float                         // "pago"
-  Venda_dtCriacao DateTime                      // "data_criacao"
-  Venda_DtUpdate  DateTime                      // "data_alteracao"
+  id_ca_receber   String   @unique              
+  status          String                        
+  total           Float                         
+  Venda_CA        String                        
+  data_vencimento DateTime                      
+  Venda_Status    String                        
+  Venda_A_Receber Float                         
+  Venda_Pago      Float                         
+  Venda_dtCriacao DateTime                      
+  Venda_DtUpdate  DateTime                      
 
-  client_id       String                        // "cliente.id" (ID da Conta Azul)
-  client_nome     String                        // "cliente.nome"
+  client_id       String                        
+  client_nome     String                        
 
   cliente         ContaAzulCliente @relation(fields: [client_id], references: [caId])
 
