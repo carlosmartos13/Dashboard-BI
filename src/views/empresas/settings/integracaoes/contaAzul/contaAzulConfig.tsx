@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import { 
@@ -25,13 +25,9 @@ const ContaAzulConfig = ({ open, setOpen, empresaId }: Props) => {
   const API_BASE = '/api/integracoes/api-contaAzul'
 
   // Ao abrir, verifica se já está conectado
-  useEffect(() => {
-    if (open && empresaId) {
-      checkStatus()
-    }
-  }, [open, empresaId])
+  
 
-  const checkStatus = async () => {
+ const checkStatus = useCallback(async () => {
     setLoading(true)
 
     try {
@@ -48,7 +44,13 @@ const ContaAzulConfig = ({ open, setOpen, empresaId }: Props) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [empresaId]) // <--- Dependência do useCallback
+
+  useEffect(() => {
+    if (open && empresaId) {
+      checkStatus()
+    }
+  }, [open, empresaId, checkStatus]) // <--- Agora seguro de adicionar
 
   // Ação de Redirecionar
   const handleConnect = () => {
