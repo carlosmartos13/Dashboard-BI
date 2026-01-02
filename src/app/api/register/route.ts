@@ -30,13 +30,13 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(password, 10)
 
     // 4. Cria o usuário no banco
-    // Nota: Definimos o role padrão como 'ATENDENTE' ou outro que você preferir
+    // Nota: Definimos o role padrão como 'REGISTRADO' ou outro que você preferir
     const newUser = await prisma.user.create({
       data: {
         name: username,
         email: email,
         password: hashedPassword,
-        role: 'ATENDENTE' // <--- Define o cargo padrão de quem se cadastra
+        role: 'REGISTRADO' // <--- Define o cargo padrão de quem se cadastra
       }
     })
 

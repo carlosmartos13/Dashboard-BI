@@ -1,5 +1,8 @@
 'use client'
 
+// React Imports
+import { useState } from 'react' // <--- 1. Importar useState
+
 // Next Imports
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -9,6 +12,7 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 import { styled, useTheme } from '@mui/material/styles'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
+import Alert from '@mui/material/Alert' // <--- 2. Importar Alert para mostrar mensagens
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -54,20 +58,54 @@ const MaskImg = styled('img')({
 })
 
 const ForgotPassword = ({ mode }: { mode: SystemMode }) => {
-  // Vars
+  // --- 3. ESTADOS (Lógica nova) ---
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Vars e Hooks Originais
   const darkImg = '/images/pages/auth-mask-dark.png'
   const lightImg = '/images/pages/auth-mask-light.png'
   const darkIllustration = '/images/illustrations/auth/v2-forgot-password-dark.png'
   const lightIllustration = '/images/illustrations/auth/v2-forgot-password-light.png'
 
-  // Hooks
   const { lang: locale } = useParams()
   const { settings } = useSettings()
   const theme = useTheme()
   const hidden = useMediaQuery(theme.breakpoints.down('md'))
   const authBackground = useImageVariant(mode, lightImg, darkImg)
-
   const characterIllustration = useImageVariant(mode, lightIllustration, darkIllustration)
+
+  // --- 4. FUNÇÃO DE ENVIO ---
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault() // Não recarrega a página
+    setLoading(true)
+    setMessage(null) // Limpa mensagens anteriores
+
+    try {
+      // Chama a API que criamos no passo anterior
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        // Sucesso: Mostra mensagem verde
+        setMessage({ type: 'success', text: 'Email enviado! Verifique sua caixa de entrada.' })
+        setEmail('') // Limpa o campo
+      } else {
+        // Erro: Mostra mensagem vermelha
+        throw new Error(data.message || 'Erro ao enviar email.')
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className='flex bs-full justify-center'>
@@ -91,14 +129,33 @@ const ForgotPassword = ({ mode }: { mode: SystemMode }) => {
         </Link>
         <div className='flex flex-col gap-6 is-full sm:is-auto md:is-full sm:max-is-[400px] md:max-is-[unset] mbs-8 sm:mbs-11 md:mbs-0'>
           <div className='flex flex-col gap-1'>
-            <Typography variant='h4'>Forgot Password 🔒</Typography>
-            <Typography>Enter your email and we&#39;ll send you instructions to reset your password</Typography>
+            <Typography variant='h4'>Esqueci minha senha 🔒</Typography>
+            <Typography>Insira seu e-mail e enviaremos instruções para redefinir sua senha.</Typography>
           </div>
-          <form noValidate autoComplete='off' onSubmit={e => e.preventDefault()} className='flex flex-col gap-6'>
-            <CustomTextField autoFocus fullWidth label='Email' placeholder='Enter your email' />
-            <Button fullWidth variant='contained' type='submit'>
-              Send Reset Link
+
+          {/* --- 5. EXIBE ALERTA DE SUCESSO OU ERRO --- */}
+          {message && (
+            <Alert severity={message.type} sx={{ mb: 2 }}>
+              {message.text}
+            </Alert>
+          )}
+
+          <form noValidate autoComplete='off' onSubmit={handleSubmit} className='flex flex-col gap-6'>
+            <CustomTextField
+              autoFocus
+              fullWidth
+              label='Email'
+              placeholder='Coloque seu e-mail'
+              // --- 6. CONECTA O INPUT AO STATE ---
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              disabled={loading} // Trava enquanto envia
+            />
+
+            <Button fullWidth variant='contained' type='submit' disabled={loading}>
+              {loading ? 'Enviando...' : 'Enviar link de redefinição'}
             </Button>
+
             <Typography className='flex justify-center items-center' color='primary.main'>
               <Link href={getLocalizedUrl('/login', locale as Locale)} className='flex items-center gap-1.5'>
                 <DirectionalIcon
@@ -106,7 +163,7 @@ const ForgotPassword = ({ mode }: { mode: SystemMode }) => {
                   rtlIconClass='tabler-chevron-right'
                   className='text-xl'
                 />
-                <span>Back to login</span>
+                <span>Voltar para o login</span>
               </Link>
             </Typography>
           </form>

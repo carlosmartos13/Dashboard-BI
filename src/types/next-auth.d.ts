@@ -1,25 +1,29 @@
-// src/types/next-auth.d.ts
-import { Role } from '@prisma/client'
-import 'next-auth'
-import 'next-auth/jwt'
+import NextAuth, { DefaultSession } from 'next-auth'
+import { JWT } from 'next-auth/jwt'
 
 declare module 'next-auth' {
-  // Estende a interface do Usuário que vem do banco
-  interface User {
-    role: Role
-  }
-
-  // Estende a Sessão que fica disponível no frontend
   interface Session {
     user: {
-      role: Role
+      id: string
+      twoFactorEnabled: boolean
+      isTwoFactorPending?: boolean // <--- NOVO: Indica se falta digitar o código
+      role?: string
     } & DefaultSession['user']
+  }
+
+  interface User {
+    id: string
+    twoFactorEnabled: boolean
+    isTwoFactorPending?: boolean // <--- NOVO
+    role?: string
   }
 }
 
 declare module 'next-auth/jwt' {
-  // Estende o Token JWT
   interface JWT {
-    role: Role
+    id: string
+    twoFactorEnabled: boolean
+    isTwoFactorPending?: boolean // <--- NOVO
+    role?: string
   }
 }

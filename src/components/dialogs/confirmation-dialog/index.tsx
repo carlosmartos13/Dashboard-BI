@@ -51,32 +51,30 @@ const ConfirmationDialog = ({ open, setOpen, type }: ConfirmationDialogProps) =>
             })}
           >
             <Typography variant='h4'>
-              {type === 'delete-account' && 'Are you sure you want to deactivate your account?'}
-              {type === 'unsubscribe' && 'Are you sure to cancel your subscription?'}
-              {type === 'suspend-account' && 'Are you sure?'}
-              {type === 'delete-order' && 'Are you sure?'}
-              {type === 'delete-customer' && 'Are you sure?'}
+              {type === 'delete-account' && 'Tem certeza de que deseja desativar sua conta?'}
+              {type === 'unsubscribe' && 'Tem certeza de que deseja cancelar sua assinatura?'}
+              {type === 'suspend-account' && 'Tem certeza?'}
+              {type === 'delete-order' && 'Tem certeza?'}
+              {type === 'delete-customer' && 'Tem certeza?'}
             </Typography>
             {type === 'suspend-account' && (
-              <Typography color='text.primary'>You won&#39;t be able to revert user!</Typography>
+              <Typography color='text.primary'>Você não poderá reverter o usuário!</Typography>
             )}
-            {type === 'delete-order' && (
-              <Typography color='text.primary'>You won&#39;t be able to revert order!</Typography>
-            )}
+            {type === 'delete-order' && <Typography color='text.primary'>Você não poderá reverter a ordem!</Typography>}
             {type === 'delete-customer' && (
-              <Typography color='text.primary'>You won&#39;t be able to revert customer!</Typography>
+              <Typography color='text.primary'>Você não poderá reverter o cliente!</Typography>
             )}
           </Wrapper>
         </DialogContent>
         <DialogActions className='justify-center pbs-0 sm:pbe-16 sm:pli-16'>
           <Button variant='contained' onClick={() => handleConfirmation(true)}>
             {type === 'suspend-account'
-              ? 'Yes, Suspend User!'
+              ? 'Sim, suspender usuário!'
               : type === 'delete-order'
-                ? 'Yes, Delete Order!'
+                ? 'Sim, Excluir Ordem!'
                 : type === 'delete-customer'
-                  ? 'Yes, Delete Customer!'
-                  : 'Yes'}
+                  ? 'Sim, Excluir Cliente!'
+                  : 'Sim'}
           </Button>
           <Button
             variant='tonal'
@@ -109,19 +107,19 @@ const ConfirmationDialog = ({ open, setOpen, type }: ConfirmationDialogProps) =>
           <Typography color='text.primary'>
             {userInput ? (
               <>
-                {type === 'delete-account' && 'Your account has been deactivated successfully.'}
-                {type === 'unsubscribe' && 'Your subscription cancelled successfully.'}
-                {type === 'suspend-account' && 'User has been suspended.'}
-                {type === 'delete-order' && 'Your order deleted successfully.'}
-                {type === 'delete-customer' && 'Your customer removed successfully.'}
+                {type === 'delete-account' && 'Sua conta foi desativada com sucesso.'}
+                {type === 'unsubscribe' && 'Sua assinatura foi cancelada com sucesso.'}
+                {type === 'suspend-account' && 'O usuário foi suspenso.'}
+                {type === 'delete-order' && 'Sua ordem foi excluída com sucesso.'}
+                {type === 'delete-customer' && 'Seu cliente foi removido com sucesso.'}
               </>
             ) : (
               <>
-                {type === 'delete-account' && 'Account Deactivation Cancelled!'}
-                {type === 'unsubscribe' && 'Unsubscription Cancelled!!'}
-                {type === 'suspend-account' && 'Cancelled Suspension :)'}
-                {type === 'delete-order' && 'Order Deletion Cancelled'}
-                {type === 'delete-customer' && 'Customer Deletion Cancelled'}
+                {type === 'delete-account' && 'Desativação de conta cancelada!'}
+                {type === 'unsubscribe' && 'Cancelamento de assinatura cancelado!'}
+                {type === 'suspend-account' && 'Suspensão cancelada :)'}
+                {type === 'delete-order' && 'Exclusão de ordem cancelada'}
+                {type === 'delete-customer' && 'Exclusão de cliente cancelada'}
               </>
             )}
           </Typography>

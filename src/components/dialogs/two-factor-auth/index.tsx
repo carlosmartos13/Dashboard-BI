@@ -1,8 +1,14 @@
 'use client'
 
 // React Imports
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
+
+// Next Imports
+import { useRouter } from 'next/navigation' // <--- 1. Importar useRouter
+
+// NextAuth Imports
+import { useSession } from 'next-auth/react'
 
 // MUI Imports
 import Dialog from '@mui/material/Dialog'
@@ -14,14 +20,15 @@ import Button from '@mui/material/Button'
 import Typography from '@mui/material/Typography'
 import Alert from '@mui/material/Alert'
 import AlertTitle from '@mui/material/AlertTitle'
-
-// Type Imports
-import type { CustomInputHorizontalData } from '@core/components/custom-inputs/types'
+import CircularProgress from '@mui/material/CircularProgress'
+import Snackbar from '@mui/material/Snackbar'
+import Box from '@mui/material/Box'
 
 // Component Imports
+import CustomTextField from '@core/components/mui/TextField'
 import CustomInputHorizontal from '@core/components/custom-inputs/Horizontal'
 import DialogCloseButton from '../DialogCloseButton'
-import CustomTextField from '@core/components/mui/TextField'
+import type { CustomInputHorizontalData } from '@core/components/custom-inputs/types'
 
 type TwoFactorAuthProps = {
   open: boolean
@@ -34,33 +41,34 @@ const data: CustomInputHorizontalData[] = [
       <div className='flex items-top gap-1'>
         <i className='tabler-settings text-xl shrink-0' />
         <Typography className='font-medium' color='text.primary'>
-          Authenticator Apps
+          Google Authenticator / Authenticator App
         </Typography>
       </div>
     ),
     value: 'app',
     isSelected: true,
-    content: 'Get code from an app like Google Authenticator or Microsoft Authenticator.'
+    content: 'Obtenha o código de um aplicativo como o Google Authenticator ou o Microsoft Authenticator.'
   },
   {
     title: (
       <div className='flex items-top gap-1'>
-        <i className='tabler-message-2 text-xl' />
+        <i className='tabler-mail text-xl shrink-0' />
         <Typography className='font-medium' color='text.primary'>
-          SMS
+          E-MAIL
         </Typography>
       </div>
     ),
-    value: 'sms',
-    content: 'We will send a code via SMS if you need to use your backup login method.'
+    value: 'E-MAIL',
+    content: 'Enviaremos um código por e-mail caso precise usar seu método de login alternativo.'
   }
 ]
 
-const SMSDialog = (handleAuthDialogClose: () => void) => {
+// --- 1. COMPONENTE E-MAIL ---
+const EMAILDialog = (handleAuthDialogClose: () => void) => {
   return (
     <>
       <DialogTitle variant='h5' className='flex flex-col gap-2 sm:pbs-16 sm:pbe-6 sm:pli-16'>
-        Verify Your Mobile Number for SMS
+        Verify Your Mobile Number for E-MAIL
         <Typography component='span' className='flex flex-col'>
           Enter your mobile phone number with country code and we will send you a verification code.
         </Typography>
@@ -72,13 +80,7 @@ const SMSDialog = (handleAuthDialogClose: () => void) => {
         <Button variant='tonal' type='reset' color='secondary' onClick={handleAuthDialogClose}>
           Cancel
         </Button>
-        <Button
-          color='success'
-          variant='contained'
-          type='submit'
-          endIcon={<i className='tabler-check' />}
-          onClick={handleAuthDialogClose}
-        >
+        <Button color='success' variant='contained' type='submit' onClick={handleAuthDialogClose}>
           Submit
         </Button>
       </DialogActions>
@@ -86,88 +88,239 @@ const SMSDialog = (handleAuthDialogClose: () => void) => {
   )
 }
 
-const AppDialog = (handleAuthDialogClose: () => void) => {
+// --- 2. COMPONENTE APP (QR Code) ---
+type AppDialogProps = {
+  handleClose: () => void
+  qrCodeUrl: string
+  token: string
+  setToken: (val: string) => void
+  onVerify: () => void
+  loading: boolean
+}
+
+const AppDialog = ({ handleClose, qrCodeUrl, token, setToken, onVerify, loading }: AppDialogProps) => {
   return (
     <>
       <DialogTitle variant='h4' className='text-center sm:pbs-16 sm:pbe-6 sm:pli-16'>
-        Add Authenticator App
+        Adicionar Autenticação de Dois Fatores
       </DialogTitle>
       <DialogContent className='flex flex-col gap-6 pbs-0 sm:pli-16'>
         <div className='flex flex-col gap-2'>
           <Typography variant='h5'>Authenticator Apps</Typography>
           <Typography>
-            Using an authenticator app like Google Authenticator, Microsoft Authenticator, Authy, or 1Password, scan the
-            QR code. It will generate a 6 digit code for you to enter below.
+            Usando um aplicativo autenticador, escaneie o código QR. Ele gerará um código de 6 dígitos.
           </Typography>
         </div>
         <div className='flex justify-center'>
-          <img alt='qr-code' height={150} width={150} src='/images/misc/barcode.png' />
+          {qrCodeUrl ? (
+            <img alt='qr-code' height={150} width={150} src={qrCodeUrl} />
+          ) : (
+            <div className='flex justify-center items-center h-[150px] w-[150px]'>
+              <CircularProgress />
+            </div>
+          )}
         </div>
         <div className='flex flex-col gap-4'>
           <Alert severity='warning' icon={false}>
-            <AlertTitle>ASDLKNASDA9AHS678dGhASD78AB</AlertTitle>
-            If you having trouble using the QR code, select manual entry on your app
+            <AlertTitle>Google APP Authenticator</AlertTitle>
+            Se tiver dificuldades com o QR Code, selecione entrada manual no seu app.
           </Alert>
-          <CustomTextField fullWidth label='Enter Authentication Code' placeholder='Enter Authentication Code' />
+          <CustomTextField
+            fullWidth
+            label='Código de Autenticação'
+            placeholder='123456'
+            value={token}
+            onChange={e => setToken(e.target.value)}
+          />
         </div>
       </DialogContent>
       <DialogActions className='pbs-0 sm:pbe-16 sm:pli-16'>
-        <Button variant='tonal' type='reset' color='secondary' onClick={handleAuthDialogClose}>
-          Cancel
+        <Button variant='tonal' color='secondary' onClick={handleClose}>
+          Cancelar
         </Button>
         <Button
           color='success'
           variant='contained'
-          type='submit'
-          endIcon={<i className='tabler-check' />}
-          onClick={handleAuthDialogClose}
+          onClick={onVerify}
+          disabled={loading || token.length < 6}
+          endIcon={loading ? <CircularProgress size={20} color='inherit' /> : <i className='tabler-check' />}
         >
-          Submit
+          Verificar e Ativar
         </Button>
       </DialogActions>
     </>
   )
 }
 
-const TwoFactorAuth = ({ open, setOpen }: TwoFactorAuthProps) => {
-  // Vars
-  const initialSelectedOption: string = data.filter(item => item.isSelected)[
-    data.filter(item => item.isSelected).length - 1
-  ].value
+// --- 3. COMPONENTE CÓDIGOS DE BACKUP ---
+type BackupCodeDialogProps = {
+  codes: string[]
+  onFinish: () => void
+}
 
-  // States
-  const [authType, setAuthType] = useState<string>(initialSelectedOption)
-  const [showAuthDialog, setShowAuthDialog] = useState<boolean>(false)
-
-  const handleClose = () => {
-    setOpen(false)
-
-    if (authType !== 'app') {
-      setAuthType('app')
-    }
-  }
-
-  const handleAuthDialogClose = () => {
-    setShowAuthDialog(false)
-    setShowAuthDialog(false)
-
-    if (authType !== 'app') {
-      setTimeout(() => {
-        setAuthType('app')
-      }, 250)
-    }
-  }
-
-  const handleOptionChange = (prop: string | ChangeEvent<HTMLInputElement>) => {
-    if (typeof prop === 'string') {
-      setAuthType(prop)
-    } else {
-      setAuthType((prop.target as HTMLInputElement).value)
-    }
+const BackupCodeDialog = ({ codes, onFinish }: BackupCodeDialogProps) => {
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codes.join('\n'))
   }
 
   return (
     <>
+      <DialogTitle variant='h4' className='text-center sm:pbs-16 sm:pbe-6 sm:pli-16'>
+        Códigos de Recuperação
+      </DialogTitle>
+      <DialogContent className='flex flex-col gap-6 pbs-0 sm:pli-16'>
+        <div className='flex flex-col gap-2'>
+          <Alert severity='info' icon={<i className='tabler-info-circle' />}>
+            <AlertTitle>Importante!</AlertTitle>
+            Salve estes códigos em um lugar seguro. Se você perder seu celular, poderá usar um destes códigos para
+            entrar na sua conta. Cada código só pode ser usado uma vez.
+          </Alert>
+        </div>
+
+        <Box className='grid grid-cols-2 gap-4 p-4 rounded bg-action-hover border border-divider'>
+          {codes.map((code, index) => (
+            <div key={index} className='flex items-center gap-2'>
+              <i className='tabler-circle-filled text-[6px] text-textSecondary' />
+              <Typography className='font-mono font-bold tracking-wider'>{code}</Typography>
+            </div>
+          ))}
+        </Box>
+
+        <div className='flex justify-center'>
+          <Button startIcon={<i className='tabler-copy' />} onClick={handleCopy}>
+            Copiar Todos os Códigos
+          </Button>
+        </div>
+      </DialogContent>
+
+      <DialogActions className='pbs-0 sm:pbe-16 sm:pli-16'>
+        {/* Adicionei um onClick assíncrono aqui */}
+        <Button variant='contained' color='primary' onClick={onFinish} fullWidth>
+          Entendi, finalizei o backup
+        </Button>
+      </DialogActions>
+    </>
+  )
+}
+
+// --- 4. COMPONENTE PRINCIPAL ---
+const TwoFactorAuth = ({ open, setOpen }: TwoFactorAuthProps) => {
+  const { update } = useSession()
+  const router = useRouter() // <--- 2. Instanciar useRouter
+
+  // Estados
+  const initialSelectedOption = data.filter(item => item.isSelected)[data.filter(item => item.isSelected).length - 1]
+    .value
+  const [authType, setAuthType] = useState<string>(initialSelectedOption)
+  const [showAuthDialog, setShowAuthDialog] = useState<boolean>(false)
+
+  // Estados Lógicos
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
+  const [token, setToken] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+
+  const [backupCodes, setBackupCodes] = useState<string[]>([])
+
+  const [feedback, setFeedback] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success'
+  })
+
+  useEffect(() => {
+    if (showAuthDialog && authType === 'app' && backupCodes.length === 0) {
+      const fetchQr = async () => {
+        try {
+          const res = await fetch('/api/auth/2fa/generate')
+          const data = await res.json()
+          if (data.qrCodeUrl) setQrCodeUrl(data.qrCodeUrl)
+        } catch (err) {
+          console.error(err)
+        }
+      }
+      fetchQr()
+    }
+  }, [showAuthDialog, authType, backupCodes.length])
+
+  // Handlers de Fechamento
+  const handleClose = () => {
+    setOpen(false)
+    resetState()
+  }
+
+  const handleAuthDialogClose = () => {
+    setShowAuthDialog(false)
+    resetState()
+  }
+
+  const resetState = () => {
+    setToken('')
+    setBackupCodes([])
+    if (authType !== 'app') setTimeout(() => setAuthType('app'), 250)
+  }
+
+  const handleOptionChange = (prop: string | ChangeEvent<HTMLInputElement>) => {
+    setAuthType(typeof prop === 'string' ? prop : (prop.target as HTMLInputElement).value)
+  }
+
+  // --- LÓGICA DE VERIFICAÇÃO ---
+  const handleVerify = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        setFeedback({ open: true, message: '2FA Ativado! Salve seus códigos de backup.', severity: 'success' })
+
+        if (data.backupCodes && Array.isArray(data.backupCodes)) {
+          setBackupCodes(data.backupCodes)
+        }
+
+        // Atualização Otimista
+        await update({ twoFactorEnabled: true })
+      } else {
+        setFeedback({ open: true, message: data.message || 'Código inválido', severity: 'error' })
+      }
+    } catch (err) {
+      setFeedback({ open: true, message: 'Erro ao verificar', severity: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // --- 3. FINALIZAR BACKUP (AQUI ESTÁ A CORREÇÃO) ---
+  const handleFinishBackup = async () => {
+    // Força o NextAuth a buscar a sessão mais recente no servidor
+    // Isso garante que o status 'twoFactorEnabled: true' seja baixado
+    await update()
+
+    // Força o Next.js a atualizar os componentes da página
+    router.refresh()
+
+    // Fecha os modais
+    setOpen(false)
+    setShowAuthDialog(false)
+    resetState()
+  }
+
+  return (
+    <>
+      <Snackbar
+        open={feedback.open}
+        autoHideDuration={4000}
+        onClose={() => setFeedback(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert severity={feedback.severity} variant='filled'>
+          {feedback.message}
+        </Alert>
+      </Snackbar>
+
       <Dialog
         fullWidth
         maxWidth='md'
@@ -180,11 +333,8 @@ const TwoFactorAuth = ({ open, setOpen }: TwoFactorAuthProps) => {
         <DialogCloseButton onClick={handleClose} disableRipple>
           <i className='tabler-x' />
         </DialogCloseButton>
-        <DialogTitle variant='h4' className='flex gap-2 flex-col text-center sm:pbs-16 sm:pbe-6 sm:pli-16'>
-          Select Authentication Method
-          <Typography component='span' className='flex flex-col text-center'>
-            You also need to select a method by which the proxy authenticates to the directory serve.
-          </Typography>
+        <DialogTitle variant='h4' className='text-center sm:pbs-16 sm:pbe-6 sm:pli-16'>
+          Selecione o método de autenticação
         </DialogTitle>
         <DialogContent className='pbs-0 sm:pli-16'>
           <Grid container spacing={6}>
@@ -208,12 +358,11 @@ const TwoFactorAuth = ({ open, setOpen }: TwoFactorAuthProps) => {
               setOpen(false)
               setShowAuthDialog(true)
             }}
-            className='capitalize'
           >
-            Continue
+            Continuar
           </Button>
-          <Button variant='tonal' color='secondary' onClick={handleClose} className='capitalize'>
-            Cancel
+          <Button variant='tonal' color='secondary' onClick={handleClose}>
+            Cancelar
           </Button>
         </DialogActions>
       </Dialog>
@@ -231,7 +380,20 @@ const TwoFactorAuth = ({ open, setOpen }: TwoFactorAuthProps) => {
           <i className='tabler-x' />
         </DialogCloseButton>
         <form onSubmit={e => e.preventDefault()}>
-          {authType === 'sms' ? SMSDialog(handleAuthDialogClose) : AppDialog(handleAuthDialogClose)}
+          {backupCodes.length > 0 ? (
+            <BackupCodeDialog codes={backupCodes} onFinish={handleFinishBackup} />
+          ) : authType === 'E-MAIL' ? (
+            EMAILDialog(handleAuthDialogClose)
+          ) : (
+            <AppDialog
+              handleClose={handleAuthDialogClose}
+              qrCodeUrl={qrCodeUrl}
+              token={token}
+              setToken={setToken}
+              onVerify={handleVerify}
+              loading={loading}
+            />
+          )}
         </form>
       </Dialog>
     </>

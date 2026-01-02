@@ -11,31 +11,16 @@ const prisma = new PrismaClient()
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
 
-  // ** Configure one or more authentication providers
-  // ** Please refer to https://next-auth.js.org/configuration/options#providers for more `providers` options
   providers: [
     CredentialProvider({
-      // ** The name to display on the sign in form (e.g. 'Sign in with...')
-      // ** For more details on Credentials Provider, visit https://next-auth.js.org/providers/credentials
       name: 'Credentials',
       type: 'credentials',
-
-      /*
-       * As we are using our own Sign-in page, we do not need to change
-       * username or password attributes manually in following credentials object.
-       */
       credentials: {},
       async authorize(credentials) {
-        /*
-         * You need to provide your own logic here that takes the credentials submitted and returns either
-         * an object representing a user or value that is false/null if the credentials are invalid.
-         * For e.g. return { id: 1, name: 'J Smith', email: 'jsmith@example.com' }
-         * You can also use the `req` object to obtain additional parameters (i.e., the request IP address)
-         */
         const { email, password } = credentials as { email: string; password: string }
 
         try {
-          // ** Login API Call to match the user credentials and receive user data in response along with his role
+          // ** Login API Call
           const res = await fetch(`${process.env.API_URL}/login`, {
             method: 'POST',
             headers: {
@@ -51,12 +36,23 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (res.status === 200) {
-            /*
-             * Please unset all the sensitive information of the user either from API response or before returning
-             * user data below. Below return statement will set the user object in the token and the same is set in
-             * the session which will be accessible all over the app.
-             */
-            return data
+            // Busca status do 2FA no banco local
+            const localUser = await prisma.user.findUnique({
+              where: { email: email },
+              select: { twoFactorEnabled: true }
+            })
+
+            const is2faEnabled = localUser?.twoFactorEnabled || false
+
+            // --- A CORREÇÃO ESTÁ AQUI ---
+            // Você precisa RETORNAR o objeto mesclado
+            return {
+              ...data, // Dados da API externa (id, name, email, token)
+              twoFactorEnabled: is2faEnabled,
+              // Se 2FA estiver ativado, marcamos como pendente para o Middleware interceptar
+              isTwoFactorPending: is2faEnabled
+            }
+            // -----------------------------
           }
 
           return null
@@ -71,48 +67,48 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
       allowDangerousEmailAccountLinking: true
     })
-
-    // ** ...add more providers here
   ],
 
-  // ** Please refer to https://next-auth.js.org/configuration/options#session for more `session` options
   session: {
-    /*
-     * Choose how you want to save the user session.
-     * The default is `jwt`, an encrypted JWT (JWE) stored in the session cookie.
-     * If you use an `adapter` however, NextAuth default it to `database` instead.
-     * You can still force a JWT session by explicitly defining `jwt`.
-     * When using `database`, the session cookie will only contain a `sessionToken` value,
-     * which is used to look up the session in the database.
-     * If you use a custom credentials provider, user accounts will not be persisted in a database by NextAuth.js (even if one is configured).
-     * The option to use JSON Web Tokens for session tokens must be enabled to use a custom credentials provider.
-     */
     strategy: 'jwt',
-
-    // ** Seconds - How long until an idle session expires and is no longer valid
-    maxAge: 30 * 24 * 60 * 60 // ** 30 days
+    maxAge: 30 * 24 * 60 * 60 // 30 days
   },
 
-  // ** Please refer to https://next-auth.js.org/configuration/options#pages for more `pages` options
   pages: {
     signIn: '/login'
   },
 
-  // ** Please refer to https://next-auth.js.org/configuration/options#callbacks for more `callbacks` options
   callbacks: {
-    async jwt({ token, user }) {
-      // Esse callback roda sempre que um token é criado ou atualizado
+    async jwt({ token, user, trigger, session }) {
+      // 1. Login inicial
       if (user) {
-        token.role = user.role // Passa o cargo do banco para o token
-        token.name = user.name
+        token.id = user.id
+        token.twoFactorEnabled = user.twoFactorEnabled
+        token.isTwoFactorPending = user.isTwoFactorPending
+      }
+
+      // 2. Atualização manual
+      if (trigger === 'update' && session) {
+        token = { ...token, ...session.user }
+
+        // Se o frontend avisar que verificou o 2FA, removemos a pendência
+        if (session.isTwoFactorVerified === true) {
+          token.isTwoFactorPending = false
+        }
+
+        // Garante atualização do status do 2FA se vier na sessão
+        if (typeof session.twoFactorEnabled === 'boolean') {
+          token.twoFactorEnabled = session.twoFactorEnabled
+        }
       }
       return token
     },
+
     async session({ session, token }) {
-      // Esse callback roda quando o frontend pede os dados da sessão
       if (session.user) {
-        session.user.role = token.role // Passa o cargo do token para a sessão
-        session.user.name = token.name
+        session.user.id = token.id as string
+        session.user.twoFactorEnabled = token.twoFactorEnabled as boolean
+        session.user.isTwoFactorPending = token.isTwoFactorPending as boolean
       }
       return session
     }

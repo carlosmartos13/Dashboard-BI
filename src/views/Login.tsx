@@ -18,6 +18,7 @@ import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Divider from '@mui/material/Divider'
 import Alert from '@mui/material/Alert'
+import AlertTitle from '@mui/material/AlertTitle' // Opcional, mas ajuda visualmente, vou usar Typography se não puder importar
 
 // Third-party Imports
 import { signIn } from 'next-auth/react'
@@ -90,6 +91,9 @@ const Login = ({ mode }: { mode: SystemMode }) => {
   const [isPasswordShown, setIsPasswordShown] = useState(false)
   const [errorState, setErrorState] = useState<ErrorType | null>(null)
 
+  // --- NOVO: Contador de tentativas falhas ---
+  const [failedAttempts, setFailedAttempts] = useState(0)
+
   // Vars
   const darkImg = '/images/pages/auth-mask-dark.png'
   const lightImg = '/images/pages/auth-mask-light.png'
@@ -130,22 +134,43 @@ const Login = ({ mode }: { mode: SystemMode }) => {
   const handleClickShowPassword = () => setIsPasswordShown(show => !show)
 
   const onSubmit: SubmitHandler<FormData> = async (data: FormData) => {
+    // Reseta erro ao tentar enviar
+    setErrorState(null)
+
     const res = await signIn('credentials', {
       email: data.email,
       password: data.password,
       redirect: false
     })
 
-    if (res && res.ok && res.error === null) {
-      // Vars
+    if (res && res.ok && !res.error) {
+      // Sucesso: Limpa tentativas
+      setFailedAttempts(0)
       const redirectURL = searchParams.get('redirectTo') ?? '/'
-
       router.replace(getLocalizedUrl(redirectURL, locale as Locale))
     } else {
+      // --- LÓGICA DE ERRO AJUSTADA ---
       if (res?.error) {
-        const error = JSON.parse(res.error)
+        // Incrementa tentativas
+        const attempts = failedAttempts + 1
+        setFailedAttempts(attempts)
 
-        setErrorState(error)
+        let errorMessage = 'Ocorreu um erro inesperado.'
+
+        try {
+          // Tenta parsear JSON da sua API
+          const parsed = JSON.parse(res.error)
+          errorMessage = parsed.message || JSON.stringify(parsed)
+        } catch (e) {
+          // Se falhar (erro "Unexpected token C"), é string do NextAuth
+          if (res.error === 'CredentialsSignin') {
+            errorMessage = 'E-mail ou senha incorretos. Verifique suas credenciais.'
+          } else {
+            errorMessage = res.error
+          }
+        }
+
+        setErrorState({ message: [errorMessage] })
       }
     }
   }
@@ -172,12 +197,36 @@ const Login = ({ mode }: { mode: SystemMode }) => {
             <Typography variant='h4'>{`Welcome to ${themeConfig.templateName}! 👋🏻`}</Typography>
             <Typography>Please sign-in to your account and start the adventure</Typography>
           </div>
-          <Alert icon={false} className='bg-[var(--mui-palette-primary-lightOpacity)]'>
+
+          {/* Alerta Padrão (Mantido conforme solicitado) */}
+          {/* <Alert icon={false} className='bg-[var(--mui-palette-primary-lightOpacity)]'>
             <Typography variant='body2' color='primary.main'>
               Email: <span className='font-medium'>admin@vuexy.com</span> / Pass:{' '}
               <span className='font-medium'>admin</span>
             </Typography>
-          </Alert>
+          </Alert> */}
+
+          {/* --- NOVO: ALERTA DE ERRO DE LOGIN --- */}
+          {errorState && (
+            <Alert severity='error'>
+              {errorState.message[0]}
+              {/* Oferta de Reset na 3ª tentativa */}
+              {failedAttempts >= 3 && (
+                <div className='mt-1'>
+                  <Typography variant='caption' className='block'>
+                    Está com dificuldades?
+                  </Typography>
+                  <Link
+                    href={getLocalizedUrl('/forgot-password', locale as Locale)}
+                    className='text-sm font-bold underline hover:text-red-700'
+                  >
+                    Redefinir minha senha
+                  </Link>
+                </div>
+              )}
+            </Alert>
+          )}
+
           <form
             noValidate
             autoComplete='off'
@@ -198,7 +247,9 @@ const Login = ({ mode }: { mode: SystemMode }) => {
                   label='Email'
                   placeholder='Enter your email'
                   onChange={e => {
-                    field.onChange(e.target.value)
+                    // --- NOVO: Transforma em minúsculo automaticamente ---
+                    const val = e.target.value.toLowerCase()
+                    field.onChange(val)
                     errorState !== null && setErrorState(null)
                   }}
                   {...((errors.email || errorState !== null) && {

@@ -214,7 +214,7 @@ const Register = ({ mode }: { mode: SystemMode }) => {
             <Divider className='gap-2'>ou</Divider>
 
             <div className='flex justify-center items-center gap-1.5'>
-              <IconButton className='text-facebook' size='small'>
+              {/* <IconButton className='text-facebook' size='small'>
                 <i className='tabler-brand-facebook-filled' />
               </IconButton>
               <IconButton className='text-twitter' size='small'>
@@ -222,7 +222,7 @@ const Register = ({ mode }: { mode: SystemMode }) => {
               </IconButton>
               <IconButton className='text-textPrimary' size='small'>
                 <i className='tabler-brand-github-filled' />
-              </IconButton>
+              </IconButton> */}
 
               {/* --- BOTÃO DO GOOGLE CONFIGURADO --- */}
               <IconButton className='text-error' size='small' onClick={() => signIn('google', { callbackUrl: '/' })}>
